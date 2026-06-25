@@ -18,6 +18,7 @@
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
+    z-index: 0;
   }
   #ui {
     position: absolute;
@@ -29,7 +30,107 @@
     letter-spacing: 2px;
     font-style: italic;
     animation: fadeOut 4s forwards;
-    animation-delay: 3s;
+    animation-delay: 7s;
+    z-index: 1;
+  }
+  #intro {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(6, 3, 12, 0.96);
+    z-index: 5;
+    transition: opacity 0.35s ease, visibility 0.35s ease;
+  }
+  #intro.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  #intro .card {
+    width: min(720px, 100%);
+    padding: 32px 28px;
+    border-radius: 32px;
+    background: rgba(18, 12, 30, 0.98);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 36px 90px rgba(0,0,0,0.45);
+    text-align: center;
+    color: #fef7f2;
+  }
+  #intro .card h1 {
+    margin: 0 0 0.9rem;
+    font-size: 1.55rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #fff;
+  }
+  #intro .card p {
+    margin: 0.85rem 0;
+    line-height: 1.7;
+    font-size: 1rem;
+    opacity: 0.95;
+  }
+  #intro .card p:last-child {
+    margin-top: 1.35rem;
+    color: rgba(255,255,255,0.82);
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+  }
+  .option-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 20px;
+  }
+  .option-buttons button {
+    min-width: 140px;
+    padding: 14px 18px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  }
+  .option-buttons button:hover {
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.14);
+    border-color: rgba(255,255,255,0.3);
+  }
+  .option-buttons button.primary {
+    background: rgba(255,255,255,0.16);
+    border-color: rgba(255,255,255,0.28);
+  }
+  .hidden {
+    display: none !important;
+  }
+  #controls {
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    z-index: 2;
+    text-align: center;
+  }
+  #controls button {
+    min-width: 180px;
+    padding: 14px 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.98rem;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  }
+  #controls button:hover {
+    transform: translateY(-1px);
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.32);
   }
   @keyframes fadeOut {
     to { opacity: 0; }
@@ -38,16 +139,34 @@
 </head>
 <body>
 
-<div id="ui">Click anywhere to plant a flower...</div>
+<div id="intro">
+  <div class="card">
+    <h1>A gentle welcome</h1>
+    <p>A beautiful bouquet for you, Potato.</p>
+    <p>I hope this little site makes you smile.</p>
+    <p>I'm sorry for every moment I annoyed you or made you angry. I never wanted to make you feel bad.</p>
+    <p><em>Tap anywhere to continue.</em></p>
+  </div>
+</div>
+<div id="ui">Click anywhere to bloom a flower...</div>
+<div id="controls" class="hidden">
+  <button id="autoBtn" class="primary">Start Auto Bloom</button>
+  <button id="clearBtn">Clear Flowers</button>
+</div>
 <canvas id="c"></canvas>
-
 <script>
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
+const intro  = document.getElementById('intro');
+const controls = document.getElementById('controls');
 let W, H, CX, BASE, SC;
 
 const flowers = [];
 const START = Date.now();
+let autoBloomInterval = null;
+let autoBloomEnabled = false;
+let patternPositions = [];
+let patternIndex = 0;
 
 function resize() {
   W    = canvas.width  = window.innerWidth;
@@ -56,9 +175,73 @@ function resize() {
   BASE = H * 0.95; 
   SC   = Math.min(W, H) / 700;
   if (W < 600) SC = W / 350;
+  buildBloomPattern();
 }
 resize();
 window.addEventListener('resize', resize);
+
+function buildBloomPattern() {
+  patternPositions = [];
+  const centerX = CX;
+  const centerY = BASE - 220;
+  const rings = [0, 70 * SC, 120 * SC, 170 * SC];
+  const counts = [1, 6, 9, 12];
+
+  for (let ring = 0; ring < rings.length; ring++) {
+    const radius = rings[ring];
+    const count = counts[ring];
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + (ring * 0.24);
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY - Math.sin(angle) * radius * 0.85 - ring * 10 * SC;
+      patternPositions.push({ x, y });
+    }
+  }
+  patternIndex = 0;
+}
+
+function createPatternFlower() {
+  if (!patternPositions.length) buildBloomPattern();
+  if (flowers.length > 60) return;
+  const pos = patternPositions[patternIndex % patternPositions.length];
+  patternIndex += 1;
+  createFlower(pos.x, pos.y);
+}
+
+function startAutoBloom() {
+  if (autoBloomEnabled) return;
+  autoBloomEnabled = true;
+  if (!patternPositions.length) buildBloomPattern();
+  autoBloomInterval = setInterval(createPatternFlower, 1200);
+}
+
+function stopAutoBloom() {
+  if (!autoBloomEnabled) return;
+  autoBloomEnabled = false;
+  clearInterval(autoBloomInterval);
+  autoBloomInterval = null;
+}
+
+function clearFlowers() {
+  stopAutoBloom();
+  flowers.length = 0;
+  if (autoBtn) {
+    autoBtn.textContent = 'Start Auto Bloom';
+  }
+}
+
+function hideIntro() {
+  if (!intro) return;
+  intro.classList.add('hidden');
+  if (controls) controls.classList.remove('hidden');
+}
+
+intro && intro.addEventListener('click', hideIntro);
+
+const autoBtn = document.getElementById('autoBtn');
+const clearBtn = document.getElementById('clearBtn');
+if (autoBtn) autoBtn.addEventListener('click', startAutoBloom);
+if (clearBtn) clearBtn.addEventListener('click', clearFlowers);
 
 /* ── HELPERS ─────────────────────────────── */
 const clamp   = (v,a,b) => Math.max(a, Math.min(b, v));
@@ -137,6 +320,8 @@ function drawEnvironment() {
 /* ── FLOWER RENDERERS ────────────────────── */
 function drawStem(x0,y0, cx1,cy1, cx2,cy2, x1,y1, prog, thick, col) {
   if (prog <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = 0.58;
   ctx.beginPath();
   const steps = 48;
   for (let i = 0; i <= steps*prog; i++) {
@@ -145,6 +330,7 @@ function drawStem(x0,y0, cx1,cy1, cx2,cy2, x1,y1, prog, thick, col) {
   }
   ctx.strokeStyle = col; ctx.lineWidth = thick; ctx.lineCap = 'round';
   ctx.shadowColor = col; ctx.shadowBlur = 2; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
 // LILY
@@ -152,14 +338,15 @@ function drawLilyLeaf(x, y, rot, size, prog) {
   if (prog <= 0) return;
   const s = size * prog;
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha = 0.68;
   ctx.beginPath(); ctx.moveTo(0, 0);
   ctx.quadraticCurveTo(s * 0.15, s * 0.15, s, 0);
   ctx.quadraticCurveTo(s * 0.15, -s * 0.15, 0, 0);
   const lg = ctx.createLinearGradient(0, 0, s, 0);
-  lg.addColorStop(0, '#2d5e20'); lg.addColorStop(1, '#509c3c');
+  lg.addColorStop(0, 'rgba(45,94,32,0.7)'); lg.addColorStop(1, 'rgba(80,156,60,0.7)');
   ctx.fillStyle = lg; ctx.fill();
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * 0.5, 0, s * 0.9, 0);
-  ctx.strokeStyle = 'rgba(0, 40, 0, 0.4)'; ctx.lineWidth = s * 0.02; ctx.stroke();
+  ctx.strokeStyle = 'rgba(0, 40, 0, 0.3)'; ctx.lineWidth = s * 0.02; ctx.stroke();
   ctx.restore();
 }
 function drawLilyFlower(x, y, size, prog, wob, stemAngle) {
@@ -232,11 +419,12 @@ function drawRoseFlower(x, y, size, prog, wob, stemAngle) {
 function drawSunflowerLeaf(x, y, rot, size, prog) {
   if (prog <= 0) return; const s = size * prog;
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha = 0.68;
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s*0.4, s*0.3, s, 0); ctx.quadraticCurveTo(s*0.4, -s*0.3, 0, 0);
-  const lg = ctx.createLinearGradient(0, 0, s, 0); lg.addColorStop(0, '#1b6522'); lg.addColorStop(1, '#348f32');
+  const lg = ctx.createLinearGradient(0, 0, s, 0); lg.addColorStop(0, 'rgba(27,101,34,0.7)'); lg.addColorStop(1, 'rgba(52,143,50,0.7)');
   ctx.fillStyle = lg; ctx.fill();
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s*0.5, 0, s*0.9, 0);
-  ctx.strokeStyle='rgba(0, 50, 0, 0.4)'; ctx.lineWidth=s*0.03; ctx.stroke();
+  ctx.strokeStyle='rgba(0, 50, 0, 0.3)'; ctx.lineWidth=s*0.03; ctx.stroke();
   ctx.restore();
 }
 function drawSunflowerFlower(x, y, size, prog, wob, stemAngle) {
@@ -278,10 +466,11 @@ function drawSunflowerFlower(x, y, size, prog, wob, stemAngle) {
 function drawTulipLeaf(x, y, rot, size, prog) {
   if (prog <= 0) return; const s = size * prog;
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+  ctx.globalAlpha = 0.68;
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(s*0.3, s*0.25, s*0.8, s*0.1, s, 0);
   ctx.bezierCurveTo(s*0.8, -s*0.15, s*0.3, -s*0.25, 0, 0);
   const lg = ctx.createLinearGradient(0, 0, s, 0);
-  lg.addColorStop(0, '#2e5441'); lg.addColorStop(0.5, '#4b7a62'); lg.addColorStop(1, '#335e47');
+  lg.addColorStop(0, 'rgba(46,84,65,0.75)'); lg.addColorStop(0.5, 'rgba(75,122,98,0.75)'); lg.addColorStop(1, 'rgba(51,94,71,0.75)');
   ctx.fillStyle = lg; ctx.fill();
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s*0.5, 0, s*0.9, 0);
   ctx.strokeStyle='rgba(255, 255, 255, 0.08)'; ctx.lineWidth=s*0.03; ctx.stroke();
@@ -338,55 +527,43 @@ const FLOWER_DEFS = {
   generic:   { sd: '#1b6522', sl: '#2caa38', leaves: [] }
 };
 
-window.addEventListener('click', (e) => {
+function createFlower(tx, ty, type = null) {
   const types = Object.keys(FLOWER_DEFS);
-  const type  = types[Math.floor(Math.random() * types.length)];
-  const def   = FLOWER_DEFS[type];
+  type = type || types[Math.floor(Math.random() * types.length)];
+  const def = FLOWER_DEFS[type];
 
-  // Raw click target
-  let tx = e.clientX;
-  let ty = e.clientY;
-  
-  // Prevent blooming too low
   if (ty > BASE - 100) ty = BASE - 100;
-
   const size = (30 + Math.random() * 25) * SC;
 
-  // OVERLAP PREVENTION: Nudge target if clicking on an existing flower
   let overlapping = true;
   let attempts = 0;
-  while(overlapping && attempts < 15) {
-      overlapping = false;
-      for(let f of flowers) {
-          let dx = tx - f.tx;
-          let dy = ty - f.ty;
-          let minDist = (size + f.size) * 0.8; // Safe distance based on flower sizes
-          if(dx*dx + dy*dy < minDist*minDist) {
-              // Push outward
-              tx += (Math.random() > 0.5 ? 1 : -1) * minDist;
-              ty += (Math.random() - 0.5) * minDist;
-              overlapping = true;
-              break;
-          }
+  while (overlapping && attempts < 15) {
+    overlapping = false;
+    for (let f of flowers) {
+      let dx = tx - f.tx;
+      let dy = ty - f.ty;
+      let minDist = (size + f.size) * 0.8;
+      if (dx*dx + dy*dy < minDist*minDist) {
+        tx += (Math.random() > 0.5 ? 1 : -1) * minDist;
+        ty += (Math.random() - 0.5) * minDist;
+        overlapping = true;
+        break;
       }
-      attempts++;
+    }
+    attempts++;
   }
-  
-  // Keep within screen bounds
+
   if (tx < 50) tx = 50;
   if (tx > W - 50) tx = W - 50;
   if (ty < 50) ty = 50;
   if (ty > BASE - 100) ty = BASE - 100;
 
-  // ORIGIN: Map click X to a narrower fan at the bottom center to prevent massive criss-crossing
-  const xSpread = ((tx / W) - 0.5) * 200; 
-  const bx = CX + xSpread; 
+  const xSpread = ((tx / W) - 0.5) * 200;
+  const bx = CX + xSpread;
   const by = BASE + Math.random() * 20;
-
-  // STEM CURVATURE: Create an elegant 'S' or bowing shape
-  const cp1x = bx; // Point straight up from base
+  const cp1x = bx;
   const cp1y = by - Math.abs(by - ty) * 0.4;
-  const cp2x = tx - (tx - bx) * 0.2; // Curve smoothly into target
+  const cp2x = tx - (tx - bx) * 0.2;
   const cp2y = ty + Math.abs(by - ty) * 0.4;
 
   flowers.push({
@@ -401,6 +578,10 @@ window.addEventListener('click', (e) => {
     sd: def.sd, sl: def.sl, leaves: def.leaves,
     dir: Math.random() < 0.5 ? 1 : -1
   });
+}
+
+window.addEventListener('click', (e) => {
+  createFlower(e.clientX, e.clientY);
 });
 
 function draw() {
